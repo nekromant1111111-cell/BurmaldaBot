@@ -110,6 +110,12 @@ def start_webhook() -> None:
 
     app = web.Application()
 
+    # Health check — чтобы Render не засыпал
+    async def health(request):
+        return web.Response(text="BurmaldaBot is alive!")
+
+    app.router.add_get("/", health)
+
     # Настраиваем вебхук
     webhook_requests_handler = SimpleRequestHandler(dispatcher=dp, bot=bot)
     webhook_requests_handler.register(app, path="/webhook")

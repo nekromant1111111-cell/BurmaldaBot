@@ -20,7 +20,7 @@ class Config:
     # Webhook / Polling
     USE_WEBHOOK: bool = os.getenv("USE_WEBHOOK", "False").lower() == "true"
     WEBHOOK_URL: str = os.getenv("WEBHOOK_URL", "")
-    WEBHOOK_PORT: int = int(os.getenv("WEBHOOK_PORT", "8080"))
+    WEBHOOK_PORT: int = int(os.getenv("PORT", os.getenv("WEBHOOK_PORT", "8080")))
 
     # Хост для вебхука (0.0.0.0 для Render)
     WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST", "0.0.0.0")

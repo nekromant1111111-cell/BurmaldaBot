@@ -229,7 +229,7 @@ async def ask_llm(user_id: int, message: str, search_context: str | None = None)
     messages = [{"role": "system", "content": system}]
     messages.extend(history)
 
-    # Подмешиваем результаты поиска как контекст для модели
+    # Подмешиваем актуальные данные (поиск/погода) как контекст для модели
     if search_context:
         messages.append(
             {
@@ -237,8 +237,8 @@ async def ask_llm(user_id: int, message: str, search_context: str | None = None)
                 "content": (
                     "Вопрос пользователя:\n"
                     f"{message}\n\n"
-                    "Результаты поиска из интернета (используй их для ответа, "
-                    "ссылки в конце):\n"
+                    "Актуальные данные, полученные из интернета "
+                    "(используй их для ответа):\n"
                     f"{search_context}"
                 ),
             }

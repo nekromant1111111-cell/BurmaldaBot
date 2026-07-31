@@ -22,7 +22,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from aiohttp import web
 
 from config import Config
-from app.handlers import start, ai_chat, search
+from app.handlers import start, ai_chat, search, weather
 
 # Настройка логирования
 logging.basicConfig(
@@ -86,6 +86,7 @@ def create_dispatcher() -> Dispatcher:
     # Регистрируем роутеры (search — до ai_chat, чтобы команда не уходила в AI)
     dp.include_router(start.router)
     dp.include_router(search.router)
+    dp.include_router(weather.router)
     dp.include_router(ai_chat.router)
 
     return dp

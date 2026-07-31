@@ -11,7 +11,7 @@ from aiogram import Router
 from aiogram.types import Message
 
 from app.services.ai_service import add_message, ask_llm, get_history
-from app.services import search_service
+from app.services import search_service, weather_service
 
 logger = logging.getLogger(__name__)
 
@@ -193,10 +193,20 @@ async def ai_message(message: Message) -> None:
         search_context = None
         if _needs_search(user_text):
             await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-            ok, result = await search_service.search(user_id, user_text)
-            if ok and result:
-                search_context = _format_search_context(user_text, result)
-                logger.info(f"Автопоиск для {user_id}: найдено {len(result)} результатов")
+
+            # Погода — через отдельный API (поисковик для неё бесполезен)
+            if "погод" in user_text.lower():
+                weather = await weather_service.get_weather_text(user_text)
+                if weather:
+                    search_context = weather
+                    logger.info(f"Погода для {user_id}: найдена")
+
+            # Остальное — через DuckDuckGo
+            if search_context is None:
+                ok, result = await search_service.search(user_id, user_text)
+                if ok and result:
+                    search_context = _format_search_context(user_text, result)
+                    logger.info(f"Автопоиск для {user_id}: найдено {len(result)} результатов")
 
         # Спрашиваем LLM (с результатами поиска, если они есть)
         answer = await ask_llm(user_id, user_text, search_context=search_context)

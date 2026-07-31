@@ -1,13 +1,11 @@
-"""Основной хендлер: AI-чат с поддержкой инструментов.
+"""Основной хендлер: AI-чат.
 
 Правила:
 - В личном чате — отвечает на всё
 - В группе — только если в сообщении есть слово "бурмалда"
-- Лимит: 10 сообщений в час на пользователя
 """
 
 import logging
-import time
 
 from aiogram import Router
 from aiogram.types import Message
@@ -20,10 +18,6 @@ router = Router()
 
 # Ключевое слово для активации в группах
 TRIGGER_WORD = "бурмалда"
-
-# Лимиты: {user_id: [timestamps]}
-_user_requests: dict[int, list[float]] = {}
-MAX_REQUESTS_PER_HOUR = 10
 
 
 def _should_respond(message: Message) -> bool:
@@ -79,19 +73,6 @@ async def ai_message(message: Message) -> None:
 
     if not user_text:
         return
-
-    # Лимит: не более 10 запросов в час
-    now = time.time()
-    hour_ago = now - 3600
-    if user_id not in _user_requests:
-        _user_requests[user_id] = []
-    _user_requests[user_id] = [t for t in _user_requests[user_id] if t > hour_ago]
-
-    if len(_user_requests[user_id]) >= MAX_REQUESTS_PER_HOUR:
-        await message.reply("Слишком много запросов! Подожди немного и попробуй снова.", parse_mode=None)
-        return
-
-    _user_requests[user_id].append(now)
 
     # Показываем, что бот печатает
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")

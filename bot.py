@@ -75,10 +75,8 @@ async def on_startup(bot: Bot) -> None:
 
 
 async def on_shutdown(bot: Bot) -> None:
-    """Действия при остановке: удаление вебхука."""
-    if Config.USE_WEBHOOK:
-        await bot.delete_webhook()
-        logger.info("Вебхук удалён при остановке")
+    """Действия при остановке: ничего не удаляем, чтобы webhook оставался."""
+    logger.info("Бот останавливается... webhook сохраняется")
 
 
 def create_dispatcher() -> Dispatcher:
@@ -140,12 +138,12 @@ def main() -> None:
             logger.error(f"  ❌ {err}")
         sys.exit(1)
 
-    # Автоопределение Render: если есть PORT и RENDER_EXTERNAL_URL — это Render,
-    # включаем webhook даже если USE_WEBHOOK не задан в переменных
-    if os.getenv("PORT") and os.getenv("RENDER_EXTERNAL_URL"):
+    # Автоопределение Render: если есть PORT — это Render, включаем webhook
+    # даже если USE_WEBHOOK не задан в переменных
+    if os.getenv("PORT"):
         Config.USE_WEBHOOK = True
         if not Config.WEBHOOK_URL:
-            Config.WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
+            Config.WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL", "")
 
     logger.info(f"AI-бот запускается... Режим: {'webhook' if Config.USE_WEBHOOK else 'polling'}")
     logger.info(f"Модель: {Config.LLM_MODEL} (OpenRouter)")

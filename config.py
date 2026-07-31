@@ -10,13 +10,11 @@ class Config:
     # Telegram
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 
-    # LLM (Google Gemini через OpenAI-совместимый endpoint)
-    # Поддерживается и LLM_API_KEY (приоритет), и GEMINI_API_KEY для обратной совместимости
-    LLM_API_KEY: str = os.getenv("LLM_API_KEY") or os.getenv("GEMINI_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
-    LLM_BASE_URL: str = os.getenv(
-        "LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"
-    )
+    # LLM (Groq — бесплатно, ~14400 запросов/день)
+    # Поддерживаются и GROQ_API_KEY для обратной совместимости
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "groq/compound")
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
 
     # Настройки диалога
     MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "20"))

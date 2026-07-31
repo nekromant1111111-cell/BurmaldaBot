@@ -10,9 +10,10 @@ class Config:
     # Telegram
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 
-    # Google Gemini API (бесплатно до 60 запросов/мин)
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    # LLM (Yandex Cloud API — DeepSeek v4 Flash)
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt://b1g0s6oaodk4qh1m6enr/deepseek-v4-flash/latest")
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://llm.api.cloud.yandex.net/foundationModels/v1")
 
     # Настройки диалога
     MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "20"))
@@ -31,9 +32,6 @@ class Config:
         errors: list[str] = []
         if not cls.BOT_TOKEN:
             errors.append("BOT_TOKEN не задан! Получи его у @BotFather")
-        if not cls.GEMINI_API_KEY:
-            errors.append(
-                "GEMINI_API_KEY не задан! Получи ключ бесплатно на "
-                "https://aistudio.google.com/apikey"
-            )
+        if not cls.LLM_API_KEY:
+            errors.append("LLM_API_KEY не задан!")
         return errors

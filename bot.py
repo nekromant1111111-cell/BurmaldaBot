@@ -137,7 +137,7 @@ def main() -> None:
         sys.exit(1)
 
     logger.info(f"AI-бот запускается... Режим: {'webhook' if Config.USE_WEBHOOK else 'polling'}")
-    logger.info(f"Модель: {Config.GEMINI_MODEL} (Gemini)")
+    logger.info(f"Модель: {Config.LLM_MODEL} (Yandex Cloud)")
 
     if Config.USE_WEBHOOK:
         start_webhook()

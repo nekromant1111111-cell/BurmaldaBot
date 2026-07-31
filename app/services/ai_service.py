@@ -196,14 +196,6 @@ SYSTEM_PROMPT = """Ты — умный AI-ассистент в Telegram. Теб
 
 ТВОЙ СТИЛЬ: как опытный эксперт, который даёт развёрнутые ответы с фактами и примерами. Не будь поверхностным.
 
-ИСПОЛЬЗУЙ ИНСТРУМЕНТЫ:
-- web_search — для поиска в интернете (новости, факты, информация, цены)
-- get_currency_rate — для курса валют ЦБ РФ
-- read_url — для чтения страниц по ссылкам
-
-ВАЖНО: Текущее время и дата уже указаны в начале промпта, НЕ вызывай web_search для вопроса о времени.
-Если вопрос про актуальные данные (новости, курсы, погоду) — сразу ищи в интернете.
-
 ВАЖНО: НЕ используй символы разметки (*, #, _, >, `). Telegram показывает их как мусор. Используй обычный текст, ЗАГЛАВНЫЕ для выделения.
 
 Региональные настройки: рубли (₽), МСК (UTC+3), метрическая система, русский язык, даты ДД.ММ.ГГГГ.
@@ -214,7 +206,8 @@ SYSTEM_PROMPT = """Ты — умный AI-ассистент в Telegram. Теб
 
 async def ask_llm(user_id: int, message: str) -> str:
     """
-    Отправить сообщение модели с историей и инструментами.
+    Отправить сообщение модели. Сначала пробует с инструментами,
+    если модель не поддерживает — отвечает без них.
     """
     client = _llm_client()
     model = Config.LLM_MODEL
@@ -229,8 +222,8 @@ async def ask_llm(user_id: int, message: str) -> str:
     messages.extend(history)
     messages.append({"role": "user", "content": message})
 
-    # Максимум 10 итераций вызовов инструментов
-    for _ in range(10):
+    # Максимум 5 итераций вызовов инструментов
+    for _ in range(5):
         try:
             response = client.chat.completions.create(
                 model=model,
@@ -240,8 +233,18 @@ async def ask_llm(user_id: int, message: str) -> str:
                 max_tokens=4096,
             )
         except Exception as e:
-            logger.error(f"Ошибка LLM API: {e}")
-            raise
+            # Если модель не поддерживает tools — пробуем без них
+            if "tools" in str(e).lower() or "tool" in str(e).lower():
+                logger.info(f"Модель не поддерживает tools, запрашиваем без них")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=4096,
+                )
+            else:
+                logger.error(f"Ошибка LLM API: {e}")
+                raise
 
         choice = response.choices[0]
         msg = choice.message

@@ -136,13 +136,6 @@ def main() -> None:
             logger.error(f"  ❌ {err}")
         sys.exit(1)
 
-    # Автоопределение: если есть переменная PORT — это Render, нужен webhook
-    if os.getenv("PORT"):
-        Config.USE_WEBHOOK = True
-        if not Config.WEBHOOK_URL:
-            # На Render URL формируется автоматически
-            Config.WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL", "")
-
     logger.info(f"AI-бот запускается... Режим: {'webhook' if Config.USE_WEBHOOK else 'polling'}")
     logger.info(f"Модель: {Config.LLM_MODEL} (OpenRouter)")
 

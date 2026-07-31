@@ -10,10 +10,10 @@ class Config:
     # Telegram
     BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 
-    # LLM (Yandex Cloud API — DeepSeek v4 Flash)
+    # LLM (OpenRouter)
     LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt://b1g0s6oaodk4qh1m6enr/deepseek-v4-flash/latest")
-    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://llm.api.cloud.yandex.net/foundationModels/v1")
+    LLM_MODEL: str = os.getenv("LLM_MODEL", "deepseek/deepseek-chat")
+    LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 
     # Настройки диалога
     MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "20"))

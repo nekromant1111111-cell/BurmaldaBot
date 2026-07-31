@@ -222,64 +222,24 @@ async def ask_llm(user_id: int, message: str) -> str:
     messages.extend(history)
     messages.append({"role": "user", "content": message})
 
-    # Максимум 5 итераций вызовов инструментов
-    for _ in range(5):
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=TOOLS,
-                temperature=0.7,
-                max_tokens=4096,
-            )
-        except Exception as e:
-            # Если модель не поддерживает tools — пробуем без них
-            if "tools" in str(e).lower() or "tool" in str(e).lower():
-                logger.info(f"Модель не поддерживает tools, запрашиваем без них")
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=4096,
-                )
-            else:
-                logger.error(f"Ошибка LLM API: {e}")
-                raise
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=4096,
+        )
+    except Exception as e:
+        logger.error(f"Ошибка LLM API: {e}")
+        raise
 
-        choice = response.choices[0]
-        msg = choice.message
+    choice = response.choices[0]
+    msg = choice.message
 
-        # Если модель вызвала инструменты
-        if msg.tool_calls:
-            messages.append(msg)
+    if msg.content:
+        answer = msg.content
+        add_message(user_id, "user", message)
+        add_message(user_id, "assistant", answer)
+        return answer
 
-            for tool_call in msg.tool_calls:
-                tool_name = tool_call.function.name
-                try:
-                    tool_args = json.loads(tool_call.function.arguments)
-                except json.JSONDecodeError:
-                    tool_args = {}
-
-                logger.info(f"Юзер {user_id} -> {tool_name}({tool_args})")
-                result = await _run_tool(tool_name, tool_args)
-
-                messages.append(
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result,
-                    }
-                )
-
-            continue
-
-        # Текстовый ответ
-        if msg.content:
-            answer = msg.content
-            add_message(user_id, "user", message)
-            add_message(user_id, "assistant", answer)
-            return answer
-
-        return "(пусто)"
-
-    return "Слишком много итераций. Уточни запрос."
+    return "(пусто)"

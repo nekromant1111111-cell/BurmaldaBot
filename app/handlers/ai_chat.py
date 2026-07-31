@@ -78,11 +78,15 @@ async def ai_message(message: Message) -> None:
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
     try:
-        # Спрашиваем Gemini
+        # Спрашиваем LLM
         answer = await ask_llm(user_id, user_text)
 
-        # Отправляем ответ с Reply (цитирует сообщение пользователя)
-        await message.reply(answer, parse_mode=None)
+        # Отправляем с Markdown (чтобы ```-блоки отображались как код).
+        # Если Telegram не примет разметку — отправляем обычным текстом.
+        try:
+            await message.reply(answer, parse_mode="Markdown")
+        except Exception:
+            await message.reply(answer, parse_mode=None)
 
     except Exception as e:
         logger.exception(f"Ошибка при обработке сообщения от {user_id}")

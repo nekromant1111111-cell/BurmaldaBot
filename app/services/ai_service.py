@@ -1,90 +1,89 @@
 """
-AI-сервис: общение с Google Gemini + инструменты (поиск, курс валют, чтение страниц).
-
-Gemini 3.5 Flash Lite — бесплатно, 60 запросов в минуту.
+AI-сервис: общение с DeepSeek v4 Flash (через Yandex Cloud API) + инструменты.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
-from google import genai
-from google.genai import types as genai_types
+from openai import OpenAI
 
 from config import Config
 
 logger = logging.getLogger(__name__)
 
-# Типы ролей
-Role = Literal["user", "model"]
+# Типы ролей для истории
+Role = Literal["user", "assistant"]
 
-# Словарь для хранения истории диалогов
-_chat_history: dict[int, list[genai_types.Content]] = {}
+# Словарь для хранения истории диалогов: user_id -> список сообщений
+_chat_history: dict[int, list[dict]] = {}
 
-# ———— Инструменты (tools) для Gemini ———— #
+# ———— Инструменты (tools) в OpenAI-формате ———— #
 
-SEARCH_TOOL = genai_types.Tool(
-    function_declarations=[
-        genai_types.FunctionDeclaration(
-            name="web_search",
-            description="Поиск в интернете. Используй когда нужно найти свежую информацию, новости, факты.",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={
-                    "query": genai_types.Schema(
-                        type=genai_types.Type.STRING,
-                        description="Поисковый запрос.",
-                    ),
+WEB_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "web_search",
+        "description": "Поиск в интернете. Используй когда нужно найти свежую информацию, новости, факты.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Поисковый запрос.",
                 },
-                required=["query"],
-            ),
-        )
-    ]
-)
+            },
+            "required": ["query"],
+        },
+    },
+}
 
-CURRENCY_TOOL = genai_types.Tool(
-    function_declarations=[
-        genai_types.FunctionDeclaration(
-            name="get_currency_rate",
-            description="Получить официальный курс валют к рублю от Центробанка РФ (USD, EUR, CNY и др.)",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={},
-            ),
-        )
-    ]
-)
-
-READ_URL_TOOL = genai_types.Tool(
-    function_declarations=[
-        genai_types.FunctionDeclaration(
-            name="read_url",
-            description="Прочитать содержимое страницы по URL-ссылке.",
-            parameters=genai_types.Schema(
-                type=genai_types.Type.OBJECT,
-                properties={
-                    "url": genai_types.Schema(
-                        type=genai_types.Type.STRING,
-                        description="Полный URL страницы.",
-                    ),
+READ_URL_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "read_url",
+        "description": "Прочитать содержимое страницы по URL-ссылке.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "Полный URL страницы.",
                 },
-                required=["url"],
-            ),
-        )
-    ]
-)
+            },
+            "required": ["url"],
+        },
+    },
+}
 
-TOOLS = [SEARCH_TOOL, CURRENCY_TOOL, READ_URL_TOOL]
+CURRENCY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_currency_rate",
+        "description": "Получить официальный курс валют к рублю от Центробанка РФ (USD, EUR, CNY и др.)",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+}
+
+TOOLS = [WEB_SEARCH_TOOL, READ_URL_TOOL, CURRENCY_TOOL]
 
 
-def _gemini_client() -> genai.Client:
-    return genai.Client(api_key=Config.GEMINI_API_KEY)
+def _llm_client() -> OpenAI:
+    """Создаёт клиент LLM API (совместимый с OpenAI)."""
+    return OpenAI(
+        api_key=Config.LLM_API_KEY,
+        base_url=Config.LLM_BASE_URL,
+    )
 
 
-def get_history(user_id: int) -> list[genai_types.Content]:
+def get_history(user_id: int) -> list[dict]:
     return _chat_history.get(user_id, [])
 
 
@@ -95,12 +94,10 @@ def _trim_history(user_id: int) -> None:
         _chat_history[user_id] = history[-max_msgs:]
 
 
-def add_message(user_id: int, role: str, text: str) -> None:
+def add_message(user_id: int, role: str, content: str) -> None:
     if user_id not in _chat_history:
         _chat_history[user_id] = []
-    _chat_history[user_id].append(
-        genai_types.Content(role=role, parts=[genai_types.Part.from_text(text=text)])
-    )
+    _chat_history[user_id].append({"role": role, "content": content})
     _trim_history(user_id)
 
 
@@ -215,12 +212,12 @@ SYSTEM_PROMPT = """Ты — умный AI-ассистент в Telegram. Теб
 """
 
 
-async def ask_gemini(user_id: int, message: str) -> str:
+async def ask_llm(user_id: int, message: str) -> str:
     """
-    Отправить сообщение Gemini с историей и инструментами.
+    Отправить сообщение модели с историей и инструментами.
     """
-    client = _gemini_client()
-    model = Config.GEMINI_MODEL
+    client = _llm_client()
+    model = Config.LLM_MODEL
 
     msk_tz = timezone(timedelta(hours=3))
     system = SYSTEM_PROMPT.format(
@@ -228,52 +225,56 @@ async def ask_gemini(user_id: int, message: str) -> str:
     )
 
     history = get_history(user_id)
-    contents = list(history)
-    contents.append(
-        genai_types.Content(role="user", parts=[genai_types.Part.from_text(text=message)])
-    )
+    messages = [{"role": "system", "content": system}]
+    messages.extend(history)
+    messages.append({"role": "user", "content": message})
 
+    # Максимум 10 итераций вызовов инструментов
     for _ in range(10):
-        response = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=genai_types.GenerateContentConfig(
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
                 tools=TOOLS,
-                system_instruction=system,
                 temperature=0.7,
-            ),
-        )
-
-        if not response.candidates:
-            return "Ответ заблокирован фильтрами. Попробуй переформулировать."
-
-        part = response.candidates[0].content.parts[0]
-
-        if part.function_call:
-            fc = part.function_call
-            tool_name = fc.name
-            tool_args = {k: v for k, v in fc.args.items()}
-            logger.info(f"Юзер {user_id} -> {tool_name}({tool_args})")
-
-            result = await _run_tool(tool_name, tool_args)
-            contents.append(response.candidates[0].content)
-            contents.append(
-                genai_types.Content(
-                    role="user",
-                    parts=[
-                        genai_types.Part.from_function_response(
-                            name=tool_name,
-                            response={"result": result},
-                        )
-                    ],
-                )
+                max_tokens=4096,
             )
+        except Exception as e:
+            logger.error(f"Ошибка LLM API: {e}")
+            raise
+
+        choice = response.choices[0]
+        msg = choice.message
+
+        # Если модель вызвала инструменты
+        if msg.tool_calls:
+            messages.append(msg)
+
+            for tool_call in msg.tool_calls:
+                tool_name = tool_call.function.name
+                try:
+                    tool_args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    tool_args = {}
+
+                logger.info(f"Юзер {user_id} -> {tool_name}({tool_args})")
+                result = await _run_tool(tool_name, tool_args)
+
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": result,
+                    }
+                )
+
             continue
 
-        if part.text:
-            answer = part.text
+        # Текстовый ответ
+        if msg.content:
+            answer = msg.content
             add_message(user_id, "user", message)
-            add_message(user_id, "model", answer)
+            add_message(user_id, "assistant", answer)
             return answer
 
         return "(пусто)"

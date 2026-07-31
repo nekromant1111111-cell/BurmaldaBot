@@ -61,7 +61,11 @@ def _create_bot() -> Bot:
 async def on_startup(bot: Bot) -> None:
     """Действия при запуске: установка вебхука."""
     if Config.USE_WEBHOOK:
-        webhook_url = f"{Config.WEBHOOK_URL}/webhook"
+        base = Config.WEBHOOK_URL or os.getenv("RENDER_EXTERNAL_URL", "")
+        if not base:
+            logger.error("WEBHOOK_URL не задан! Не могу установить webhook")
+            return
+        webhook_url = f"{base}/webhook"
         await bot.set_webhook(webhook_url)
         logger.info(f"Webhook установлен: {webhook_url}")
     else:
@@ -135,6 +139,13 @@ def main() -> None:
         for err in errors:
             logger.error(f"  ❌ {err}")
         sys.exit(1)
+
+    # Автоопределение Render: если есть PORT и RENDER_EXTERNAL_URL — это Render,
+    # включаем webhook даже если USE_WEBHOOK не задан в переменных
+    if os.getenv("PORT") and os.getenv("RENDER_EXTERNAL_URL"):
+        Config.USE_WEBHOOK = True
+        if not Config.WEBHOOK_URL:
+            Config.WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
 
     logger.info(f"AI-бот запускается... Режим: {'webhook' if Config.USE_WEBHOOK else 'polling'}")
     logger.info(f"Модель: {Config.LLM_MODEL} (OpenRouter)")

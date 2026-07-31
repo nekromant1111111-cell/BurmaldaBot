@@ -212,10 +212,10 @@ print("Привет, мир!")
 """
 
 
-async def ask_llm(user_id: int, message: str) -> str:
+async def ask_llm(user_id: int, message: str, search_context: str | None = None) -> str:
     """
-    Отправить сообщение модели. Сначала пробует с инструментами,
-    если модель не поддерживает — отвечает без них.
+    Отправить сообщение модели. Если передан search_context —
+    результаты поиска подмешиваются в запрос, и модель отвечает на их основе.
     """
     client = _llm_client()
     model = Config.LLM_MODEL
@@ -228,7 +228,23 @@ async def ask_llm(user_id: int, message: str) -> str:
     history = get_history(user_id)
     messages = [{"role": "system", "content": system}]
     messages.extend(history)
-    messages.append({"role": "user", "content": message})
+
+    # Подмешиваем результаты поиска как контекст для модели
+    if search_context:
+        messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "Вопрос пользователя:\n"
+                    f"{message}\n\n"
+                    "Результаты поиска из интернета (используй их для ответа, "
+                    "ссылки в конце):\n"
+                    f"{search_context}"
+                ),
+            }
+        )
+    else:
+        messages.append({"role": "user", "content": message})
 
     try:
         response = client.chat.completions.create(

@@ -11,6 +11,7 @@ from aiogram import Router
 from aiogram.types import Message
 
 from app.services.ai_service import add_message, ask_llm, get_history
+from app.services import search_service
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,45 @@ def _is_ai_message(message: Message) -> bool:
     return not message.text.startswith("/")
 
 
+# Слова-подсказки (границы слов, чтобы "курс" не срабатывал в слове "рекурсия")
+_SEARCH_WORDS = (
+    r"\bновост", r"\bкурс", r"\bпогод", r"\bцена", r"\bцене", r"\bстоимост",
+    r"\bактуальн", r"\bпоследн", r"\bсвеж", r"\bпроисходит", r"\bслучил",
+    r"\bрелиз", r"\bдоллар", r"\bевро", r"\bюань", r"\bбиткоин", r"\bbitcoin",
+    r"\bbtc", r"\busd", r"\beur", r"\bпрезидент", r"\bвыборы", r"\bсанкци",
+    r"\bчемпионат", r"\bтурнир", r"\bматч",
+)
+
+# Многословные фразы (обычное вхождение)
+_SEARCH_PHRASES = (
+    "сколько стоит", "какой курс", "что слышно", "что нового", "что сейчас",
+    "выход фильм", "выход игры", "результат игр", "цена на",
+)
+
+
+def _needs_search(text: str) -> bool:
+    """Эвристика: похоже ли сообщение на запрос свежей информации."""
+    import re
+    t = text.lower()
+    if any(p in t for p in _SEARCH_PHRASES):
+        return True
+    return any(re.search(p, t) for p in _SEARCH_WORDS)
+
+
+def _format_search_context(query: str, results: list[dict]) -> str:
+    """Форматирует результаты поиска как контекст для модели."""
+    lines = []
+    for i, r in enumerate(results, 1):
+        title = r.get("title", "Без заголовка")
+        body = r.get("body", "")
+        href = r.get("href", "")
+        lines.append(f"{i}. {title}")
+        if body:
+            lines.append(f"   {body[:200]}")
+        lines.append(f"   Источник: {href}")
+    return "\n".join(lines)
+
+
 def _should_respond(message: Message) -> bool:
     """Проверяет, должен ли бот ответить на это сообщение."""
     # В личном чате — отвечаем на всё
@@ -149,8 +189,17 @@ async def ai_message(message: Message) -> None:
     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
     try:
-        # Спрашиваем LLM
-        answer = await ask_llm(user_id, user_text)
+        # Автопоиск: если вопрос похож на запрос свежих данных — ищем в интернете
+        search_context = None
+        if _needs_search(user_text):
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            ok, result = await search_service.search(user_id, user_text)
+            if ok and result:
+                search_context = _format_search_context(user_text, result)
+                logger.info(f"Автопоиск для {user_id}: найдено {len(result)} результатов")
+
+        # Спрашиваем LLM (с результатами поиска, если они есть)
+        answer = await ask_llm(user_id, user_text, search_context=search_context)
 
         # Отправляем ответ (разбивая на части, если длинный)
         await _send_answer(message, answer)

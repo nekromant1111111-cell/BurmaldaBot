@@ -1,9 +1,10 @@
 """
-AI-сервис: общение с DeepSeek v4 Flash (через Yandex Cloud API) + инструменты.
+AI-сервис: общение с LLM (Groq) через OpenAI-совместимый API.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -94,7 +95,14 @@ def _trim_history(user_id: int) -> None:
         _chat_history[user_id] = history[-max_msgs:]
 
 
+# Максимальная длина одного сообщения в истории (чтобы запрос не разрастался)
+MAX_MSG_LENGTH = 3000
+
+
 def add_message(user_id: int, role: str, content: str) -> None:
+    # Урезаем очень длинные сообщения, чтобы не упереться в лимит размера запроса
+    if len(content) > MAX_MSG_LENGTH:
+        content = content[:MAX_MSG_LENGTH] + "…"
     if user_id not in _chat_history:
         _chat_history[user_id] = []
     _chat_history[user_id].append({"role": role, "content": content})
@@ -246,16 +254,46 @@ async def ask_llm(user_id: int, message: str, search_context: str | None = None)
     else:
         messages.append({"role": "user", "content": message})
 
-    try:
-        response = client.chat.completions.create(
+    def _request():
+        return client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=0.7,
             max_tokens=4096,
         )
+
+    def _is_too_large(e: Exception) -> bool:
+        """Ошибка из-за слишком большого запроса."""
+        s = str(e).lower()
+        return any(x in s for x in ("413", "too large", "request entity", "context length", "token limit"))
+
+    try:
+        response = await asyncio.to_thread(_request)
     except Exception as e:
-        logger.error(f"Ошибка LLM API: {e}")
-        raise
+        # Если запрос слишком большой — чистим историю и пробуем без неё один раз
+        if _is_too_large(e):
+            logger.warning(f"Запрос слишком большой для {user_id}, сбрасываю историю")
+            clear_history(user_id)
+            fresh_messages = [messages[0]]
+            if search_context:
+                fresh_messages.append(messages[-1])
+            else:
+                fresh_messages.append({"role": "user", "content": message})
+            try:
+                response = await asyncio.to_thread(
+                    lambda: client.chat.completions.create(
+                        model=model,
+                        messages=fresh_messages,
+                        temperature=0.7,
+                        max_tokens=4096,
+                    )
+                )
+            except Exception as e2:
+                logger.error(f"Ошибка LLM API после сброса: {e2}")
+                raise
+        else:
+            logger.error(f"Ошибка LLM API: {e}")
+            raise
 
     choice = response.choices[0]
     msg = choice.message

@@ -84,6 +84,13 @@ async def _send_answer(message: Message, answer: str) -> None:
             await message.reply(part, parse_mode=None)
 
 
+def _is_ai_message(message: Message) -> bool:
+    """Фильтр: обычное сообщение (не команда)."""
+    if not message.text:
+        return False
+    return not message.text.startswith("/")
+
+
 def _should_respond(message: Message) -> bool:
     """Проверяет, должен ли бот ответить на это сообщение."""
     # В личном чате — отвечаем на всё
@@ -110,7 +117,7 @@ def _should_respond(message: Message) -> bool:
     return False
 
 
-@router.message()
+@router.message(_is_ai_message)
 async def ai_message(message: Message) -> None:
     """
     Обрабатывает текстовые сообщения:
